@@ -372,7 +372,7 @@ The Archive Producer receives data from Monero and outputs it to the archive as 
 
 #### Add these monerod-archive functions
     void Blockchain::archive_block(block& b, bool is_alt_block)
-    std::string Blockchain::archive_alt_chain_info()
+    std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
     std::string Blockchain::archive_output_filename()
 
 #### Optional: Configure archive output filename
