@@ -3,7 +3,7 @@
 # monerod-archive Installer
 # ---
 # Version 6
-# (c) 2018 Neptune Research @ https://github.com/neptuneresearch
+# (c) 2018 Neptune Research (https://github.com/neptuneresearch)
 # ---
 # This will let monerod-archive write the archive file: /opt/monerodarchive/archive.log
 # ---
