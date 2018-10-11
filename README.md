@@ -24,6 +24,8 @@ Learn more about Monero on [getmonero.org](https://getmonero.org/).
 ---
 ## Table of Contents
 - [Installation](#installation)
+  - [1. Download the latest binary release](#1-download-the-latest-binary-release)
+  - [2. Run the install script](#2-run-the-install-script)
 - [Operation](#operation)
 - [Output](#output)  
   - [Daemon Console](#daemon-console)
@@ -44,6 +46,7 @@ Learn more about Monero on [getmonero.org](https://getmonero.org/).
   - [Sqlite table: monerodarchive](#sqlite-table-monerodarchive)
   - [monerod-archive v6 Output](#monerod-archive-v6-output)
   - [monerod-archive-v5 Output](#monerod-archive-v5-output)
+  - [Glibc 2.27 Update for Binary Release v6 and v7](#glibc-227-update-for-binary-release-v6-and-v7)
   - [Changelog](#changelog)
 
 
@@ -51,48 +54,20 @@ Learn more about Monero on [getmonero.org](https://getmonero.org/).
 ---
 # Installation
 
-monerod-archive requires
-- Archive Output Directory `/opt/monerodarchive/`
-- glibc 2.27
+### 1. Download the latest binary release
 
-### 1. Archive Output Directory
-monerod-archive requires the specific directory `/opt/monerodarchive` and it must be writable by monerod.
+Download and extract [monerod-archive-v8-linux-amd64.tar.gz from the Releases page](https://github.com/neptuneresearch/monerod-archive/releases).
 
-**Quick installation**  
-Run the install script `setup/monerod-archive-install.sh`.  
-  
-**Manual steps**
+monerod-archive-v8 is built and tested on Debian 9.5.
 
-    # create Archive Output Directory
-    sudo mkdir /opt/monerodarchive
-    
-    # allow monerod to write via read,write access for everyone
-    sudo chmod 666 /opt/monerodarchive
+### 2. Run the install script
+Use the install script ```INSTALL.sh``` to create the [Archive Output Directory](#archive-output-directory).
 
+To run the install script:
 
-### 2. Glibc Update (Binary Release only)
-monerod-archive binary release currently requires glibc 2.27. You may need to update your glibc to run it. glibc 2.27 is almost completely backwards compatible with older glibc, but you may also solve a glibc conflict via containerization or building the monerod-archive binary yourself.
-
-Check your glibc version:
-
-    ldd --version
-
-##### Ubuntu/Debian Instructions
-You can update with ``apt-get install libc6-dev`` from the Sid (unstable) Debian apt repo.  
-Follow this update guide for Debian (thanks @serhack):
-
-    To upgrade you need to follow these passages. 
-    Warning: if you run commands and you don't know what they do, 
-    please don't try to upgrade G_LIBC!
-    
-    1. Open with any editor the /etc/apt/sources.list
-    2. Add the following line deb http://ftp.us.debian.org/debian sid main
-    3. Run apt-get update
-    4. Let's upgrade LIBC! Run apt-get install libc6-dev and then wait...
-    5. Reopen /etc/apt/sources.list and comment (with "#") the line you wrote in the step 2. Enjoy!
-    
-    NEVER NEVER run a apt-get upgrade or apt-get full-upgrade while you are touching /etc/apt/sources.list . 
-    If you upgrade all the packages to "sid", the system can become unstable.
+    cd monerod-archive-v8-linux-amd64
+    sudo chmod u+x ./INSTALL.sh
+    ./INSTALL.sh
 
 
 
@@ -102,7 +77,7 @@ monerod-archive operates like a normal monerod.
 
 Follow ["Running monerod" in the Monero README](https://github.com/monero-project/monero#running-monerod).
 
-As of monerod-archive v6, the archive automatically starts and cannot be disabled.
+The archive automatically starts and cannot be disabled.
 
 While monerod-archive runs:
 
@@ -114,8 +89,9 @@ While monerod-archive runs:
 ---
 # Output
 
-This is **Archive Output Version 7**.  
-For output from previous archive versions, see [Appendix](#appendix).  
+This is **Archive Output Version 8**.  
+There was no change in output format from Version 7.  
+See [Appendix](#monerod-archive-v6-output) for output formats prior to version 7.  
   
 ## Daemon Console
 
@@ -138,11 +114,17 @@ When a block is received by the Block Handler and the Archive Producer is about 
 
 ## Filesystem Recording
 
-As of monerod-archive v6, archive entries are recorded in append mode to a single file.
+Archive entries are recorded in append mode to a single file.
 
 One archive entry is made per incoming block.
 
 Filesystem recording will fail silently if the Archive Output Directory is not available.
+
+
+### Archive Output Directory
+monerod-archive requires the specific directory `/opt/monerodarchive` and it must be writable by monerod.
+
+```sudo chmod 666 /opt/monerodarchive``` will grant read and write access to the Archive Output Directory for everyone including monerod-archive.
 
 
 ### Archive File
@@ -152,7 +134,7 @@ Archive output fields are tab-delimited "\t".
 
 Line example:  
 
-    7	532871954727	1	{"major_version": 1, "minor_version": 0, "timestamp": 1402673384, "prev_id": "dc13872f56acdc742a73508ff5ca9bb53250be7ed67fc3f25d8ad00c291099e7", "nonce": 1073742811, "miner_tx": {"version": 1, "unlock_time": 83696, "vin": [ {"gen": {"height": 83636}}], "vout": [ {"amount": 4001075093, "target": {"key": "04e0e92193a84b4ea5ffd49fa6b4696263e013aa28c42ef5d5f0a21329ec065d"}}, {"amount": 80000000000, "target": {"key": "19df558f9df5e2bd3c6921c9f5bb470c230a11467fedd74192e5bcaa37ea5cc3"}}, {"amount": 200000000000, "target": {"key": "1bc686513c1f86cd67ce48c25d3b83767da6949de354d3f84b6e6c6cbac71976"}}, {"amount": 6000000000000, "target": {"key": "3067b47349622701d410711ca8a87a473995c322df0b80c2b249bd6598c7b64d"}}, {"amount": 10000000000000, "target": {"key": "6a803d29300975504e7eee2fdb2a0e92995de925e207659dac0ccd90802b25a8"}}], "extra": [ 1, 225, 235, 208, 96, 218, 92, 35, 141, 25, 226, 55, 205, 31, 185, 117, 86, 153, 56, 17, 188, 73, 168, 16, 102, 95, 180, 84, 138, 233, 137, 141, 130, 2, 8, 0, 0, 0, 2, 126, 21, 54, 222], "signatures": [ ]}, "tx_hashes": [ "5af850ea6bdc70a16710ed1396e28991a2fdacb084d7e3fdb63262b793e990e6"]}	1	[{"length":1,"height":2,"deep":2,"diff":0,"hash":"ba8bc38ba847a63b71ab8b8af7eba7ba87be87afa7bef7828ab288cb28a742b4"}]	1	83636	83636
+    8	532871954727	1	{"major_version": 1, "minor_version": 0, "timestamp": 1402673384, "prev_id": "dc13872f56acdc742a73508ff5ca9bb53250be7ed67fc3f25d8ad00c291099e7", "nonce": 1073742811, "miner_tx": {"version": 1, "unlock_time": 83696, "vin": [ {"gen": {"height": 83636}}], "vout": [ {"amount": 4001075093, "target": {"key": "04e0e92193a84b4ea5ffd49fa6b4696263e013aa28c42ef5d5f0a21329ec065d"}}, {"amount": 80000000000, "target": {"key": "19df558f9df5e2bd3c6921c9f5bb470c230a11467fedd74192e5bcaa37ea5cc3"}}, {"amount": 200000000000, "target": {"key": "1bc686513c1f86cd67ce48c25d3b83767da6949de354d3f84b6e6c6cbac71976"}}, {"amount": 6000000000000, "target": {"key": "3067b47349622701d410711ca8a87a473995c322df0b80c2b249bd6598c7b64d"}}, {"amount": 10000000000000, "target": {"key": "6a803d29300975504e7eee2fdb2a0e92995de925e207659dac0ccd90802b25a8"}}], "extra": [ 1, 225, 235, 208, 96, 218, 92, 35, 141, 25, 226, 55, 205, 31, 185, 117, 86, 153, 56, 17, 188, 73, 168, 16, 102, 95, 180, 84, 138, 233, 137, 141, 130, 2, 8, 0, 0, 0, 2, 126, 21, 54, 222], "signatures": [ ]}, "tx_hashes": [ "5af850ea6bdc70a16710ed1396e28991a2fdacb084d7e3fdb63262b793e990e6"]}	1	[{"length":1,"height":2,"deep":2,"diff":0,"hash":"ba8bc38ba847a63b71ab8b8af7eba7ba87be87afa7bef7828ab288cb28a742b4"}]	1	83636	83636
 
 
 ## Output Fields
@@ -180,7 +162,7 @@ Version number of monerod-archive which created this archive entry.
   
 Minimum ```7```.  
 
-    V=7
+    V=8
 
 ---
 
@@ -355,6 +337,9 @@ NTH is set from the following locations in ```cryptonote::cryptonote_protocol_ha
 ## Monerod Compatibility
 monerod-archive is based on the following versions of [Monero](https://github.com/monero-project/monero).  
 
+v8 - Monero 0.13.0.2  
+    - commit: https://github.com/monero-project/monero/commit/77e1ebff26aeb1466a79f2535b66f165c62468ab  
+  
 v7 - Monero 0.12.3.0  
     - commit: https://github.com/monero-project/monero/commit/91c7d68b2d476c86e8ba710ccac6f3c64b91f1a5  
   
@@ -380,23 +365,28 @@ Follow ["Compiling Monero from source" in the Monero README](https://github.com/
 
 
 ## 2. Get monerod-archive
-Clone this repo OR download this single [patch file](patch/monerod-archive.patch).
+Clone this repo OR download this [patch file](src/cryptonote_core_patch_archive_v8/monerod-archive-v8.patch).
 
 
 ## 3. Patch Monero
 Using this file from this repo: 
 
-    patch/monerod-archive.patch
+    src/cryptonote_core_patch_archive_v8/monerod-archive-v8.patch
 
 Run the following inside a Monero repo.
 
-    # Test the patch
-    git apply --check monerod-archive.patch
+    # Test patch; if no messages occur, then the test succeeded
+    git apply --check monerod-archive-v8.patch
     
-    # If testing was successful, apply patch
-    git am --signoff < monerod-archive.patch
+    # OPTIONAL: If git has never been configured on your system, use the following 2 commands to set your identity within the Monero repo.
+    #   Otherwise, the Apply Patch step will fail with the message "fatal: unable to auto-detect email address (got 'user@hostname.(none)')".
+    git config user.email "you@example.com"
+    git config user.name "Your Name"
 
-
+    # Apply patch
+    git am --signoff < monerod-archive-v8.patch
+  
+  
 ## 4. Build Monero with monerod-archive
 Monero can be built as usual. Follow ["Build instructions" in the Monero README](https://github.com/monero-project/monero/blob/master/README.md#build-instructions).
 
@@ -411,7 +401,7 @@ The Block Handler is the first Monero function that receives the following data 
     (1) Block: new incoming block from the Monero network
     (2) Is alt block?: whether this block is bound toward the mainchain handler or altchain handler
 
-As of Monero 0.12.3.0 and monerod-archive v6, the Block Handler is:
+Since Monero 0.12.3.0 and monerod-archive v6, the Block Handler is:
 
     // File: cryptonote_core/blockchain.cpp
     bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc)
@@ -547,6 +537,8 @@ Recommended: To format the timestamp fields as friendly strings in SQL results, 
 | nonce | uint32_t | INT |  
 | miner_tx | transaction | TEXT |  
 | tx_hashes | std::vector<crypto::hash> | TEXT |  
+| height | uint64_t | INT |
+| hash | crypto::hash | TEXT | [reserved] |
 | **monerod-archive** |  
 | archive_version | uint8_t | INT | [monerod-archive version] |  
 | nrt | uint64_t | INT | [NRT] |  
@@ -558,7 +550,8 @@ Recommended: To format the timestamp fields as friendly strings in SQL results, 
 | is_node_synced | bool | BOOL | [is node synced?] |  
 | nch | uint64_t | INT | [NCH] |  
 | nth | uint64_t | INT | [NTH] |  
-
+| **archive_db** |  
+| deltart | N/A | INT | = (ceil(NRT / 1000) - MRT) |  
 
 ## monerod-archive v6 Output
 ### Ordering
@@ -592,18 +585,48 @@ Recommended: To format the timestamp fields as friendly strings in SQL results, 
         _hHHHHHHHH  height
         _nNNNNNNNN  nonce
         _rRRRRRRRR  random
-            .json   Block
-            .log    Altchain
+            .json   Block JSON
+            .log    Alt Chains Info JSON
+
+
+## Glibc 2.27 Update for Binary Release v6 and v7
+monerod-archive-v6 and monerod-archive-v7 binary release require glibc 2.27. You may need to update your glibc to run it. glibc 2.27 is almost completely backwards compatible with older glibc, but you may also solve a glibc conflict via containerization or building the monerod-archive binary yourself.
+
+Check your glibc version:
+
+    ldd --version
+
+##### Ubuntu/Debian Instructions
+You can update with ``apt-get install libc6-dev`` from the Sid (unstable) Debian apt repo.  
+Follow this update guide for Debian (thanks @serhack):
+
+    To upgrade you need to follow these passages. 
+    Warning: if you run commands and you don't know what they do, 
+    please don't try to upgrade G_LIBC!
+    
+    1. Open with any editor the /etc/apt/sources.list
+    2. Add the following line deb http://ftp.us.debian.org/debian sid main
+    3. Run apt-get update
+    4. Let's upgrade LIBC! Run apt-get install libc6-dev and then wait...
+    5. Reopen /etc/apt/sources.list and comment (with "#") the line you wrote in the step 2. Enjoy!
+    
+    NEVER NEVER run a apt-get upgrade or apt-get full-upgrade while you are touching /etc/apt/sources.list . 
+    If you upgrade all the packages to "sid", the system can become unstable.
 
 
 ## Changelog
+v8
+- Updated to Monero 0.13.0.2 for Monero network upgrade v8 and v9.
+- Built and tested on Debian 9.5.
+    - glibc 2.27 dependency removed.
+
 v7
 - Added Output Fields.
-  - Archive Version
-  - Synchronization State
-    - Is Node Synced?
-    - Node Current Height (NCH)
-    - Node Target Height (NTH)
+    - Archive Version
+    - Synchronization State
+       - Is Node Synced?
+       - Node Current Height (NCH)
+       - Node Target Height (NTH)
 
 v6
 - First production version. 
