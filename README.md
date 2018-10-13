@@ -124,7 +124,7 @@ Filesystem recording will fail silently if the Archive Output Directory is not a
 ### Archive Output Directory
 monerod-archive requires the specific directory `/opt/monerodarchive` and it must be writable by monerod.
 
-```sudo chmod 666 /opt/monerodarchive``` will grant read and write access to the Archive Output Directory for everyone including monerod-archive.
+```sudo chmod 755 /opt/monerodarchive``` will grant read access to the Archive Output Directory for all users and also write access for monerod-archive.
 
 
 ### Archive File
