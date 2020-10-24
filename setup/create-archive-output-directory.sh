@@ -2,8 +2,8 @@
 # ---
 # monerod-archive Installer
 # ---
-# Version 8
-# (c) 2018 Neptune Research (https://github.com/neptuneresearch)
+# Version 17
+# (c) 2018-2020 Neptune Research (https://github.com/neptuneresearch)
 # ---
 echo +----------------------------------------------------
 echo - monerod-archive installing

@@ -27,14 +27,21 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
-// 
-// ** Patched with MonerodArchive v8 by Neptune Research
+//
+// ** Patched with MonerodArchive v17 by Neptune Research
 // ** SPDX-License-Identifier: BSD-3-Clause
-// ** Changed code appears below.
 
-bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline, const cryptonote::test_options *test_options, difficulty_type fixed_difficulty)
+#include <chrono> // MonerodArchive Dependency #1
+
+//------------------------------------------------------------------
+//FIXME: possibly move this into the constructor, to avoid accidentally
+//       dereferencing a null BlockchainDB pointer
+bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline, const cryptonote::test_options *test_options, difficulty_type fixed_difficulty, const GetCheckpointsCallback& get_checkpoints/* = nullptr*/)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
+
+  CHECK_AND_ASSERT_MES(nettype != FAKECHAIN || test_options, false, "fake chain network type used without options");
+
   CRITICAL_REGION_LOCAL(m_tx_pool);
   CRITICAL_REGION_LOCAL1(m_blockchain_lock);
 
@@ -71,17 +78,17 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   }
   else if (m_nettype == TESTNET)
   {
-    for (size_t n = 0; n < sizeof(testnet_hard_forks) / sizeof(testnet_hard_forks[0]); ++n)
+    for (size_t n = 0; n < num_testnet_hard_forks; ++n)
       m_hardfork->add_fork(testnet_hard_forks[n].version, testnet_hard_forks[n].height, testnet_hard_forks[n].threshold, testnet_hard_forks[n].time);
   }
   else if (m_nettype == STAGENET)
   {
-    for (size_t n = 0; n < sizeof(stagenet_hard_forks) / sizeof(stagenet_hard_forks[0]); ++n)
+    for (size_t n = 0; n < num_stagenet_hard_forks; ++n)
       m_hardfork->add_fork(stagenet_hard_forks[n].version, stagenet_hard_forks[n].height, stagenet_hard_forks[n].threshold, stagenet_hard_forks[n].time);
   }
   else
   {
-    for (size_t n = 0; n < sizeof(mainnet_hard_forks) / sizeof(mainnet_hard_forks[0]); ++n)
+    for (size_t n = 0; n < num_mainnet_hard_forks; ++n)
       m_hardfork->add_fork(mainnet_hard_forks[n].version, mainnet_hard_forks[n].height, mainnet_hard_forks[n].threshold, mainnet_hard_forks[n].time);
   }
   m_hardfork->init();
@@ -95,9 +102,10 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   if(!m_db->height())
   {
     MINFO("Blockchain not loaded, generating genesis block.");
-    block bl = boost::value_initialized<block>();
-    block_verification_context bvc = boost::value_initialized<block_verification_context>();
+    block bl;
+    block_verification_context bvc = {};
     generate_genesis_block(bl, get_config(m_nettype).GENESIS_TX, get_config(m_nettype).GENESIS_NONCE);
+    db_wtxn_guard wtxn_guard(m_db);
     // <MonerodArchive (IsNodeSynced?3)>
     add_new_block(bl, bvc, std::make_pair(0, 0));
     // </MonerodArchive>
@@ -115,14 +123,15 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
     m_db->fixup();
   }
 
-  m_db->block_txn_start(true);
+  db_rtxn_guard rtxn_guard(m_db);
+
   // check how far behind we are
   uint64_t top_block_timestamp = m_db->get_top_block_timestamp();
   uint64_t timestamp_diff = time(NULL) - top_block_timestamp;
 
-  // genesis block has no timestamp, could probably change it to have timestamp of 1341378000...
+  // genesis block has no timestamp, could probably change it to have timestamp of 1397818133...
   if(!top_block_timestamp)
-    timestamp_diff = time(NULL) - 1341378000;
+    timestamp_diff = time(NULL) - 1397818133;
 
   // create general purpose async service queue
 
@@ -132,17 +141,18 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
 #if defined(PER_BLOCK_CHECKPOINT)
   if (m_nettype != FAKECHAIN)
-    load_compiled_in_block_hashes();
+    load_compiled_in_block_hashes(get_checkpoints);
 #endif
 
   MINFO("Blockchain initialized. last block: " << m_db->height() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block());
-  m_db->block_txn_stop();
+
+  rtxn_guard.stop();
 
   uint64_t num_popped_blocks = 0;
   while (!m_db->is_read_only())
   {
-    const uint64_t top_height = m_db->height() - 1;
-    const crypto::hash top_id = m_db->top_block_hash();
+    uint64_t top_height;
+    const crypto::hash top_id = m_db->top_block_hash(&top_height);
     const block top_block = m_db->get_top_block();
     const uint8_t ideal_hf_version = get_ideal_hard_fork_version(top_height);
     if (ideal_hf_version <= 1 || ideal_hf_version == top_block.major_version)
@@ -181,11 +191,33 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   if (num_popped_blocks > 0)
   {
     m_timestamps_and_difficulties_height = 0;
+    m_reset_timestamps_and_difficulties_height = true;
     m_hardfork->reorganize_from_chain_height(get_current_blockchain_height());
-    m_tx_pool.on_blockchain_dec(m_db->height()-1, get_tail_id());
+    uint64_t top_block_height;
+    crypto::hash top_block_hash = get_tail_id(top_block_height);
+    m_tx_pool.on_blockchain_dec(top_block_height, top_block_hash);
   }
 
-  update_next_cumulative_weight_limit();
+  if (test_options && test_options->long_term_block_weight_window)
+  {
+    m_long_term_block_weights_window = test_options->long_term_block_weight_window;
+    m_long_term_block_weights_cache_rolling_median = epee::misc_utils::rolling_median_t<uint64_t>(m_long_term_block_weights_window);
+  }
+
+  bool difficulty_ok;
+  uint64_t difficulty_recalc_height;
+  std::tie(difficulty_ok, difficulty_recalc_height) = check_difficulty_checkpoints();
+  if (!difficulty_ok)
+  {
+    MERROR("Difficulty drift detected!");
+    recalculate_difficulties(difficulty_recalc_height);
+  }
+
+  {
+    db_txn_guard txn_guard(m_db, m_db->is_read_only());
+    if (!update_next_cumulative_weight_limit())
+      return false;
+  }
   return true;
 }
 
@@ -195,43 +227,43 @@ bool Blockchain::reset_and_set_genesis_block(const block& b)
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   m_timestamps_and_difficulties_height = 0;
-  m_alternative_chains.clear();
+  m_reset_timestamps_and_difficulties_height = true;
   invalidate_block_template_cache();
   m_db->reset();
+  m_db->drop_alt_blocks();
   m_hardfork->init();
 
-  block_verification_context bvc = boost::value_initialized<block_verification_context>();
+  db_wtxn_guard wtxn_guard(m_db);
+  block_verification_context bvc = {};
   // <MonerodArchive (IsNodeSynced?4)>
   add_new_block(b, bvc, std::make_pair(0, 0));
-  // <MonerodArchive>
-  update_next_cumulative_weight_limit();
+  // </MonerodArchive>
+  if (!update_next_cumulative_weight_limit())
+    return false;
   return bvc.m_added_to_main_chain && !bvc.m_verifivation_failed;
 }
 
 //------------------------------------------------------------------
-/*
-  MonerodArchive: Monero 0.13.0.2 Blockchain::add_new_block patch
-*/
-bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc, std::pair<uint64_t,uint64_t> archive_sync_state)
+bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc, std::pair<uint64_t,uint64_t> archive_sync_state)
 {
+  try
+  {
+
   LOG_PRINT_L3("Blockchain::" << __func__);
-  //copy block here to let modify block.target
-  block bl = bl_;
   crypto::hash id = get_block_hash(bl);
   CRITICAL_REGION_LOCAL(m_tx_pool);//to avoid deadlock lets lock tx_pool for whole add/reorganize process
   CRITICAL_REGION_LOCAL1(m_blockchain_lock);
-  m_db->block_txn_start(true);
+  db_rtxn_guard rtxn_guard(m_db);
   if(have_block(id))
   {
     LOG_PRINT_L3("block with id = " << id << " already exists");
     bvc.m_already_exists = true;
-    m_db->block_txn_stop();
     m_blocks_txs_check.clear();
     return false;
   }
 
   // <MonerodArchive (All Blocks)>
-  block& bl_archive = const_cast<block&>(bl_);
+  block& bl_archive = const_cast<block&>(bl);
   // <MonerodArchive (All Blocks)>
 
   //check that block refers to chain tail
@@ -243,7 +275,7 @@ bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc
 
     //chain switching or wrong block
     bvc.m_added_to_main_chain = false;
-    m_db->block_txn_stop();
+    rtxn_guard.stop();
     bool r = handle_alternative_block(bl, id, bvc);
     m_blocks_txs_check.clear();
     return r;
@@ -256,19 +288,27 @@ bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc
   }
   // </MonerodArchive (Main Block)>
 
-  m_db->block_txn_stop();
+  rtxn_guard.stop();
   return handle_block_to_main_chain(bl, id, bvc);
+
+  }
+  catch (const std::exception &e)
+  {
+    LOG_ERROR("Exception at [add_new_block], what=" << e.what());
+    bvc.m_verifivation_failed = true;
+    return false;
+  }
 }
 //------------------------------------------------------------------
 /*
   <MonerodArchive>
-*/
+ */
 void Blockchain::archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state)
 {
   // ## read archive configuration
   std::string filename_archive = archive_output_filename();
   std::string output_field_delimiter = "\t";
-  uint64_t archive_version = 8;
+  uint64_t archive_version = 11;
 
   // ## alt_chain_info
   std::pair<uint64_t,std::string> altchaininfo = archive_alt_chain_info();
@@ -279,7 +319,7 @@ void Blockchain::archive_block(block& b, bool is_alt_block, std::pair<uint64_t,u
   uint64_t archive_current_height = archive_sync_state.first;
   uint64_t archive_target_height = archive_sync_state.second;
   bool is_node_synced = (archive_current_height >= archive_target_height);
-  
+
   // ## get data from block
   // block height: miner_tx => txin_v transaction.vin => txin_v[0] => txin_v.txin_gen => txin_gen.height
   size_t block_height = boost::get<txin_gen>(b.miner_tx.vin[0]).height;
@@ -291,14 +331,14 @@ void Blockchain::archive_block(block& b, bool is_alt_block, std::pair<uint64_t,u
   // ## OUTPUT - Daemon console
   std::stringstream patch_log;
   patch_log << "Block Archive"
-    << (is_alt_block ? " ALT " : " MAIN")
-    << " H=" << block_height 
-    << " MRT=" << block_timestamp 
-    << " NRT=" << node_timestamp
-    << " n_alt_chains=" << altchaininfo_length
-    << (is_node_synced ? " FULL" : " SYNC")
-    << " NCH=" << archive_current_height
-    << " NTH=" << archive_target_height;
+            << (is_alt_block ? " ALT " : " MAIN")
+            << " H=" << block_height
+            << " MRT=" << block_timestamp
+            << " NRT=" << node_timestamp
+            << " n_alt_chains=" << altchaininfo_length
+            << (is_node_synced ? " FULL" : " SYNC")
+            << " NCH=" << archive_current_height
+            << " NTH=" << archive_target_height;
   MCLOG_MAGENTA(el::Level::Info, "global", patch_log.str());
 
   // ## OUTPUT - Filesystem recording
@@ -312,28 +352,28 @@ void Blockchain::archive_block(block& b, bool is_alt_block, std::pair<uint64_t,u
   std::stringstream archive_line;
   // note: string << int required for int to string conversion
   archive_line << "" << archive_version // 1
-    << output_field_delimiter
-    << node_timestamp   // 2
-    << output_field_delimiter
-    << (is_alt_block ? "1" : "0") // 3
-    << output_field_delimiter;
+               << output_field_delimiter
+               << node_timestamp   // 2
+               << output_field_delimiter
+               << (is_alt_block ? "1" : "0") // 3
+               << output_field_delimiter;
   archive_line << (block_json_success ? block_json_buf.str() : "{}"); // 4
   archive_line << output_field_delimiter
-    << altchaininfo_length  // 5
-    << output_field_delimiter
-    << altchaininfo_json  // 6
-    << output_field_delimiter
-    << (is_node_synced ? "1" : "0") // 7
-    << output_field_delimiter
-    << archive_current_height // 8
-    << output_field_delimiter
-    << archive_target_height  // 9
-    << "\n";
+               << altchaininfo_length  // 5
+               << output_field_delimiter
+               << altchaininfo_json  // 6
+               << output_field_delimiter
+               << (is_node_synced ? "1" : "0") // 7
+               << output_field_delimiter
+               << archive_current_height // 8
+               << output_field_delimiter
+               << archive_target_height  // 9
+               << "\n";
 
   bool save_success = epee::file_io_utils::append_string_to_file(filename_archive, archive_line.str());
 }
 //-----------------------------------------------------------------------------------------------
-std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info() 
+std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
 {
   // rpc_get_info: read height_without_bootstrap
   uint64_t height_without_bootstrap;
@@ -341,7 +381,8 @@ std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
   ++height_without_bootstrap; // turn top block height into blockchain height
 
   // rpc_get_alternate_chains
-  std::list<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>> chains = get_alternative_chains();
+  std::vector<std::pair<block_extended_info,std::vector<crypto::hash>>> chains = get_alternative_chains();
+
   uint64_t altchains_length = boost::lexical_cast<uint64_t>(chains.size());
 
   // serialize altchains
@@ -371,12 +412,12 @@ std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
       }
       // serialize chain
       altchains_json << "{"
-                          << "\"length\"" << ":" << length << ","
-                          << "\"height\"" << ":" << start_height << ","
-                          << "\"deep\""   << ":" << deep << ","
-                          << "\"diff\""   << ":" << chain.first.cumulative_difficulty << ","
-                          << "\"hash\""   << ":" << "\"" << block_hash << "\""
-                      << "}";
+                     << "\"length\"" << ":" << length << ","
+                     << "\"height\"" << ":" << start_height << ","
+                     << "\"deep\""   << ":" << deep << ","
+                     << "\"diff\""   << ":" << chain.first.cumulative_difficulty << ","
+                     << "\"hash\""   << ":" << "\"" << block_hash << "\""
+                     << "}";
     }
 
     //  root array end
@@ -391,7 +432,7 @@ std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
   return std::make_pair(altchains_length, altchains_json.str());
 }
 //-----------------------------------------------------------------------------------------------
-std::string Blockchain::archive_output_filename() 
+std::string Blockchain::archive_output_filename()
 {
   // ## USER INPUT
   // # output_filename
@@ -405,4 +446,4 @@ std::string Blockchain::archive_output_filename()
 }
 /*
   </MonerodArchive>
-*/
+ */

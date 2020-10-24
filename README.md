@@ -6,74 +6,146 @@ monerod-archive is a patch for [monerod](https://github.com/monero-project/moner
 - [x] :bar_chart: **Alternate Blockchains**: the daemon's state of alternate blockchains
 - [x] :signal_strength: **Synchronization State**: the daemon's state of mainchain synchronization
   
-monerod-archive operates like a normal monerod as this data is recorded.  
+monerod-archive operates like a normal Monero daemon as this data is recorded.  
   
   ![Monero Block Flow and Point of Integration with monerod-archive](docs/integration.png)
   
-> monerod-archive is copyright (c) 2018 Neptune Research.  
+> monerod-archive is copyright (c) 2018-2020 Neptune Research.  
 monerod-archive is offered under the BSD-3-Clause open source license. See [LICENSE](LICENSE) for more information.  
 
 > monerod-archive is an extension to [Monero](https://github.com/monero-project/monero).  
 Monero is copyright (c) 2014-2018 The Monero Project, portions (c) 2012-2013 The Cryptonote developers.  
 Learn more about Monero on [getmonero.org](https://getmonero.org/).
 
-> monerod-archive was developed for the [Monero Archival Project](https://github.com/mitchellpkt/monero_archival_project).  
-
+> monerod-archive was developed for the [Noncesense Archival Network](https://github.com/noncesense-research-lab/archival_network).  
+Learn more about Noncesense Research Lab at [noncesense-research-lab.github.io](https://noncesense-research-lab.github.io/).
 
 
 ---
 ## Table of Contents
-- [Installation](#installation)
-  - [1. Download the latest binary release](#1-download-the-latest-binary-release)
-  - [2. Run the install script](#2-run-the-install-script)
+- [Building](#building)
+  - [Monero Compatibility](#monero-compatibility)
+  - [Operating System Requirements](#operating-system-requirements)
+  - [Build Instructions](#build-instructions)
 - [Operation](#operation)
+  - [Create the Archive Output Directory](#create-the-archive-output-directory)
 - [Output](#output)  
   - [Daemon Console](#daemon-console)
   - [Filesystem Recording](#filesystem-recording)
+  - [Archive File](#archive-file)
   - [Output Fields](#output-fields)
-- [Building](#building)
-  - [Monerod Compatibility](#monerod-compatibility)
-  - [1. Get Monero](#1-get-monero)
-  - [2. Get monerod-archive](#2-get-monerod-archive)
-  - [3. Patch Monero](#3-patch-monero)
-  - [4. Build Monero with monerod-archive](#4-build-monero-with-monerod-archive)
 - [Components](#components)
   - [Point of Integration: Block Handler](#point-of-integration-block-handler)
   - [Synchronization State: Block Handler Callers](#synchronization-state-block-handler-callers)
   - [Archive Producer](#archive-producer)
   - [Monero Source Dependencies](#monero-source-dependencies)
 - [Appendix](#appendix)
-  - [Sqlite table: monerodarchive](#sqlite-table-monerodarchive)
-  - [monerod-archive v6 Output](#monerod-archive-v6-output)
-  - [monerod-archive-v5 Output](#monerod-archive-v5-output)
-  - [Glibc 2.27 Update for Binary Release v6 and v7](#glibc-227-update-for-binary-release-v6-and-v7)
+  - [PostgreSQL table: monerodarchive](#postgresql-table-monerodarchive)
   - [Changelog](#changelog)
 
 
 
 ---
-# Installation
+# Building
 
-### 1. Download the latest binary release
+## Monero Compatibility
+monerod-archive is based on [Monero 0.17.1.1](https://github.com/monero-project/monero).  
 
-Download and extract [monerod-archive-v8-linux-amd64.tar.gz from the Releases page](https://github.com/neptuneresearch/monerod-archive/releases).
+Tag: https://github.com/monero-project/monero/releases/tag/v0.17.1.1  
+Commit: https://github.com/monero-project/monero/commit/76cc82c29234fc2805f936f0fc53d48acc9cedf7  
 
-monerod-archive-v8 is built and tested on Debian 9.5.
+Monero version targeting can be specific. If the monerod-archive patch doesn't work with your Monero version, updates to Monero may have broken compatibility with the patch. See [Components: Monero source dependencies](#monero-source-dependencies).  
 
-### 2. Run the install script
-Use the install script ```INSTALL.sh``` to create the [Archive Output Directory](#archive-output-directory).
 
-To run the install script:
+## Operating System Requirements
+monerod-archive binaries have been built and tested for Linux amd64, and should build on everything except Win32.   
 
-    cd monerod-archive-v8-linux-amd64
-    sudo chmod u+x ./INSTALL.sh
-    ./INSTALL.sh
+When building for Windows, remember to change ```archive_output_filename()``` to return a Windows path.
+
+
+### Win32 Support
+
+monerod-archive is Win64 only because ```epee::file_io_utils::append_string_to_file()``` is not implemented under Win32.
+
+If you want to support Win32, replace use of ```append_string_to_file()``` with something else.
+
+
+## Build Instructions
+The code for monerod-archive is provided in several different formats.
+
+Take one of the following paths to get a Monero repo with the monerod-archive patch installed:
+
+### Clone Repo: Clone Neptune Research's Monero repo
+We have a copy of Monero under our GitHub account, which was forked at the compatible commit and then patched with monerod-archive in a separate branch named `archive`.
+
+1. Clone our Monero repo:
+
+```  
+git clone --recursive https://github.com/neptuneresearch/monero
+```
+
+2. Checkout the `archive` branch:
+
+```
+git checkout archive
+```
+
+### Patch File: Clone Monero Project's Monero repo and use the patch file
+1. Clone Monero from https://github.com/monero-project/monero, following ["Cloning the repository" in the Monero README](https://github.com/monero-project/monero#cloning-the-repository).
+
+```
+git clone --recursive https://github.com/monero-project/monero
+```
+
+2. Using this file from this repo: 
+
+```
+src/monerod-archive-v17.patch
+```
+
+Run the following inside a Monero repo.
+
+```
+# Test patch; if no messages occur, then the test succeeded
+git apply --check monerod-archive-v17.patch
+      
+# OPTIONAL: If git has never been configured on your system, use the following 2 commands to set your identity within the Monero repo.
+#   Otherwise, the Apply Patch step will fail with the message "fatal: unable to auto-detect email address (got 'user@hostname.(none)')".
+git config user.email "you@example.com"
+git config user.name "Your Name"
+
+# Apply patch
+git am --signoff < monerod-archive-v17.patch
+```
+
+
+### Manual Patch: Clone Monero Project's Monero repo and patch the code manually
+1. Clone Monero from https://github.com/monero-project/monero, following ["Cloning the repository" in the Monero README](https://github.com/monero-project/monero#cloning-the-repository).
+
+```
+git clone --recursive https://github.com/monero-project/monero
+```
+
+2. Using these files from this repo: 
+
+```
+src/blockchain.archive-v17.patch.cpp
+src/blockchain.archive-v17.patch.h
+src/cryptonote_core.archive-v17.patch.cpp
+```
+
+Add the code in the files to your Monero repo, using a text editor or a C++ IDE.
+  
+If a function already exists, then we added or changed a few lines to existing Monero code. If working from the exact compatible commit, the contents of that function can be replaced completely; if not, you may want to diff the changes first and only copy over the exact lines that we added or changed. Any changes to existing functions start with the comment `<MonerodArchive>` and end with the comment `</MonerodArchive>`.
+
+## Building a patched Monero repo
+After you have a Monero repo with the monerod-archive patch, build Monero as usual following ["Build instructions" in the Monero README](https://github.com/monero-project/monero/blob/master/README.md#build-instructions).
 
 
 
 ---
 # Operation
-monerod-archive operates like a normal monerod.  
+monerod-archive operates like a normal Monero daemon.  
 
 Follow ["Running monerod" in the Monero README](https://github.com/monero-project/monero#running-monerod).
 
@@ -85,24 +157,26 @@ While monerod-archive runs:
 - [x] and [an archive file](#filesystem-recording) will be recorded
 
 
+## Create the Archive Output Directory
+monerod-archive requires the specific directory `/opt/monerodarchive` and it must be writable by monerod-archive.
+
+```sudo chmod 755 /opt/monerodarchive``` will grant read access to the Archive Output Directory for all users and also write access for monerod-archive.
+
+See [quick install script](setup/create-archive-output-directory.sh).
+
 
 ---
 # Output
 
-This is **Archive Output Version 8**.  
-There was no change in output format from Version 7.  
-See [Appendix](#monerod-archive-v6-output) for output formats prior to version 7.  
-  
 ## Daemon Console
 
-When a block is received by the Block Handler and the Archive Producer is about to run  
-(*GLOBAL log category, INFO log level*):
+When a block is received by the Block Handler and the Archive Producer is about to run, the following message is logged in the GLOBAL log category and INFO log level:
 
     Block Archive MAIN H=0 MRT=0000000000 NRT=0000000000000 n_alt_chains=0 SYNC NCH=0 NTH=0
 
 | Key | Description |  
 | - | - |  
-| [MAIN/ALT](#is-alt-block) | MAIN if block is bound for mainchain handler, 'ALT ' else (there is 1 space right padding) |  
+| [MAIN/ALT](#is-alt-block) | MAIN if block is bound for mainchain handler, '`ALT `' else (there is 1 space right padding) |  
 | [H](#block-json) | Block height, read from block |  
 | [MRT](#block-json) | Miner Reported Timestamp, Unix epoch seconds (10 digits), read from block |  
 | [NRT](#nrt) | Node Reported Timestamp, Unix epoch milliseconds (13 digits), read from system clock |  
@@ -121,12 +195,6 @@ One archive entry is made per incoming block.
 Filesystem recording will fail silently if the Archive Output Directory is not available.
 
 
-### Archive Output Directory
-monerod-archive requires the specific directory `/opt/monerodarchive` and it must be writable by monerod.
-
-```sudo chmod 755 /opt/monerodarchive``` will grant read access to the Archive Output Directory for all users and also write access for monerod-archive.
-
-
 ### Archive File
 Filename: `/opt/monerodarchive/archive.log`
 
@@ -134,7 +202,7 @@ Archive output fields are tab-delimited "\t".
 
 Line example:  
 
-    8	532871954727	1	{"major_version": 1, "minor_version": 0, "timestamp": 1402673384, "prev_id": "dc13872f56acdc742a73508ff5ca9bb53250be7ed67fc3f25d8ad00c291099e7", "nonce": 1073742811, "miner_tx": {"version": 1, "unlock_time": 83696, "vin": [ {"gen": {"height": 83636}}], "vout": [ {"amount": 4001075093, "target": {"key": "04e0e92193a84b4ea5ffd49fa6b4696263e013aa28c42ef5d5f0a21329ec065d"}}, {"amount": 80000000000, "target": {"key": "19df558f9df5e2bd3c6921c9f5bb470c230a11467fedd74192e5bcaa37ea5cc3"}}, {"amount": 200000000000, "target": {"key": "1bc686513c1f86cd67ce48c25d3b83767da6949de354d3f84b6e6c6cbac71976"}}, {"amount": 6000000000000, "target": {"key": "3067b47349622701d410711ca8a87a473995c322df0b80c2b249bd6598c7b64d"}}, {"amount": 10000000000000, "target": {"key": "6a803d29300975504e7eee2fdb2a0e92995de925e207659dac0ccd90802b25a8"}}], "extra": [ 1, 225, 235, 208, 96, 218, 92, 35, 141, 25, 226, 55, 205, 31, 185, 117, 86, 153, 56, 17, 188, 73, 168, 16, 102, 95, 180, 84, 138, 233, 137, 141, 130, 2, 8, 0, 0, 0, 2, 126, 21, 54, 222], "signatures": [ ]}, "tx_hashes": [ "5af850ea6bdc70a16710ed1396e28991a2fdacb084d7e3fdb63262b793e990e6"]}	1	[{"length":1,"height":2,"deep":2,"diff":0,"hash":"ba8bc38ba847a63b71ab8b8af7eba7ba87be87afa7bef7828ab288cb28a742b4"}]	1	83636	83636
+    17	532871954727	1	{"major_version": 1, "minor_version": 0, "timestamp": 1402673384, "prev_id": "dc13872f56acdc742a73508ff5ca9bb53250be7ed67fc3f25d8ad00c291099e7", "nonce": 1073742811, "miner_tx": {"version": 1, "unlock_time": 83696, "vin": [ {"gen": {"height": 83636}}], "vout": [ {"amount": 4001075093, "target": {"key": "04e0e92193a84b4ea5ffd49fa6b4696263e013aa28c42ef5d5f0a21329ec065d"}}, {"amount": 80000000000, "target": {"key": "19df558f9df5e2bd3c6921c9f5bb470c230a11467fedd74192e5bcaa37ea5cc3"}}, {"amount": 200000000000, "target": {"key": "1bc686513c1f86cd67ce48c25d3b83767da6949de354d3f84b6e6c6cbac71976"}}, {"amount": 6000000000000, "target": {"key": "3067b47349622701d410711ca8a87a473995c322df0b80c2b249bd6598c7b64d"}}, {"amount": 10000000000000, "target": {"key": "6a803d29300975504e7eee2fdb2a0e92995de925e207659dac0ccd90802b25a8"}}], "extra": [ 1, 225, 235, 208, 96, 218, 92, 35, 141, 25, 226, 55, 205, 31, 185, 117, 86, 153, 56, 17, 188, 73, 168, 16, 102, 95, 180, 84, 138, 233, 137, 141, 130, 2, 8, 0, 0, 0, 2, 126, 21, 54, 222], "signatures": [ ]}, "tx_hashes": [ "5af850ea6bdc70a16710ed1396e28991a2fdacb084d7e3fdb63262b793e990e6"]}	1	[{"length":1,"height":2,"deep":2,"diff":0,"hash":"ba8bc38ba847a63b71ab8b8af7eba7ba87be87afa7bef7828ab288cb28a742b4"}]	1	83636	83636
 
 
 ## Output Fields
@@ -160,9 +228,7 @@ Line example:
 ##### type: _**int**_
 Version number of monerod-archive which created this archive entry.  
   
-Minimum ```7```.  
-
-    V=8
+    V=17
 
 ---
 
@@ -270,7 +336,7 @@ This is a JSON version of the messages generated by the RPC command *alt_chain_i
 
 It is a summary of the daemon's state in memory of alternate blockchains that shows properties of the altchain list structure and the first block on the chain. 
 
-It seems that this state is not persisted to disk or otherwise across daemon instances. This archive may be the only stored copy of this information.
+By default, this state is not persisted across daemon instances, and will be empty every time monerod starts. Use the monerod configuration option `--keep-alt-blocks` to store alternative blocks in the LMDB and thereby persist them across daemon instances. More info: [Monero PR 5524](https://github.com/monero-project/monero/pull/5524).
 
 The daemon stores altchains in ```Blockchain::m_alternative_chains``` and provides access via ```Blockchain::get_alternative_chains()```.
 
@@ -329,67 +395,6 @@ NTH is set from the following locations in ```cryptonote::cryptonote_protocol_ha
 | ```handle_response_chain_entry()``` | ```NOTIFY_RESPONSE_CHAIN_ENTRY::request.total_height``` |
 | ```on_connection_close()``` | ```cryptonote_connection_context.m_remote_blockchain_height``` (maximum of all current p2p connections in ```m_state >= cryptonote_connection_context::state_synchronizing```) |
 | ```process_payload_sync_data()``` | ```CORE_SYNC_DATA.current_height``` |
-
-
----
-# Building
-
-## Monerod Compatibility
-monerod-archive is based on the following versions of [Monero](https://github.com/monero-project/monero).  
-
-v8 - Monero 0.13.0.2  
-    - commit: https://github.com/monero-project/monero/commit/77e1ebff26aeb1466a79f2535b66f165c62468ab  
-  
-v7 - Monero 0.12.3.0  
-    - commit: https://github.com/monero-project/monero/commit/91c7d68b2d476c86e8ba710ccac6f3c64b91f1a5  
-  
-v6 - Monero 0.12.3.0  
-    - binary commit: https://github.com/monero-project/monero/commit/702a41034d908fa60fbc44792f54b3cdc9f9af2e  
-    - patch commit: https://github.com/monero-project/monero/commit/0dddfeacc982ad208808e3a828163837fc4aba38  
-  
-Monero version targeting can be specific. If the monerod-archive patch doesn't work with your Monero version, updates to Monero may have broken compatibility with the patch. See [Components: Monero source dependencies](#monero-source-dependencies).  
-  
-Binaries of monerod with monerod-archive patch have been built and tested for Linux amd64, and should build on everything except Win32.   
-
-### Win32 Support
-
-As of v6, monerod-archive is 64-bit only because ```epee::file_io_utils::append_string_to_file()``` is not implemented under Win32.
-
-If you want to support Win32, replace use of ```append_string_to_file()``` with the legacy filesystem recording code from monerod-archive v5.
-
-When building for Windows, remember to change ```archive_output_filename()``` or ```archive_output_directory()``` to return a Windows path.
-
-
-## 1. Get Monero
-Follow ["Compiling Monero from source" in the Monero README](https://github.com/monero-project/monero#compiling-monero-from-source).
-
-
-## 2. Get monerod-archive
-Clone this repo OR download this [patch file](src/cryptonote_core_patch_archive_v8/monerod-archive-v8.patch).
-
-
-## 3. Patch Monero
-Using this file from this repo: 
-
-    src/cryptonote_core_patch_archive_v8/monerod-archive-v8.patch
-
-Run the following inside a Monero repo.
-
-    # Test patch; if no messages occur, then the test succeeded
-    git apply --check monerod-archive-v8.patch
-    
-    # OPTIONAL: If git has never been configured on your system, use the following 2 commands to set your identity within the Monero repo.
-    #   Otherwise, the Apply Patch step will fail with the message "fatal: unable to auto-detect email address (got 'user@hostname.(none)')".
-    git config user.email "you@example.com"
-    git config user.name "Your Name"
-
-    # Apply patch
-    git am --signoff < monerod-archive-v8.patch
-  
-  
-## 4. Build Monero with monerod-archive
-Monero can be built as usual. Follow ["Build instructions" in the Monero README](https://github.com/monero-project/monero/blob/master/README.md#build-instructions).
-
 
 ---
 # Components
@@ -508,9 +513,9 @@ This is the Point of Integration. The shell for the monerod-archive patch is spe
 ### blockchain::get_alternative_chains(), blockchain::block_extended_info
 ```archive_alt_chain_info()``` is an alternative client to ```Blockchain::get_alternative_chains()```, which is based on the reporting logic in the RPC layer for ```GET_ALTERNATE_CHAINS```.  
   
-```core_rpc_server::on_get_alternate_chains()``` (```rpc/core_rpc_server.cpp```) calls ```Blockchain::get_alternative_chains()```, which returns ```std::list<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>>```.  
+```core_rpc_server::on_get_alternate_chains()``` (```rpc/core_rpc_server.cpp```) calls ```Blockchain::get_alternative_chains()```, which returns ```std::vector<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>>```.  
   
-It transforms this return data into ```std::list<chain_info>```, defined under struct ```COMMAND_RPC_GET_ALTERNATE_CHAINS``` (```rpc/core_rpc_server_commands_defs.h```).  
+It transforms this return data into ```std::vector<chain_info>```, defined under struct ```COMMAND_RPC_GET_ALTERNATE_CHAINS``` (```rpc/core_rpc_server_commands_defs.h```).  
   
 The RPC command is located at ```t_rpc_command_executor::alt_chain_info()``` (```daemon/rpc_command_executor.cpp```).
 
@@ -519,102 +524,47 @@ The RPC command is located at ```t_rpc_command_executor::alt_chain_info()``` (``
 ---
 # Appendix
 
-## Sqlite table: monerodarchive
+## PostgreSQL table: monerodarchive
 
-This is a mapping between native Monero C++ types and [Sqlite v3 types](https://www.sqlite.org/datatype3.html).
+This is a mapping between native Monero C++ types and PostgreSQL v12 data types.
 
-Complex native types use TEXT columns because they are JSON serialized.
+Complex native types use VARCHAR columns because they are JSON serialized.
 
-Recommended: To format the timestamp fields as friendly strings in SQL results, use the 'unixepoch' option of the Sqlite datetime functions.
 
 | Field | C++ Type | Sqlite Type | Source |  
 | - | - | - | - |
 | **block** | | | [block json] |  
-| major_version | uint8_t | INT |  
-| minor_version | uint8_t | INT |  
-| timestamp | uint64_t | INT |  
-| prev_id | crypto::hash | TEXT |  
-| nonce | uint32_t | INT |  
-| miner_tx | transaction | TEXT |  
-| tx_hashes | std::vector<crypto::hash> | TEXT |  
-| height | uint64_t | INT |
-| hash | crypto::hash | TEXT | [reserved] |
+| major_version | uint8_t | SMALLINT |  
+| minor_version | uint8_t | SMALLINT |  
+| timestamp | uint64_t | BIGINT |  
+| prev_id | crypto::hash | BYTEA |  
+| nonce | uint32_t | INTEGER |  
+| miner_tx | transaction | VARCHAR |  
+| tx_hashes | std::vector<crypto::hash> | VARCHAR |  
+| height | uint64_t | BIGINT |
+| hash | crypto::hash | VARCHAR | [reserved] |
 | **monerod-archive** |  
-| archive_version | uint8_t | INT | [monerod-archive version] |  
-| nrt | uint64_t | INT | [NRT] |  
+| archive_version | uint8_t | SMALLINT | [monerod-archive version] |  
+| nrt | uint64_t | BIGINT | [NRT] |  
 | is_alt_block | bool | BOOL | [is alt block?] |  
 | **alt_chain_info** |  
-| n_alt_chains | uint64_t | INT | [n_alt_chains] |  
-| alt_chains_info_json | std::string | TEXT | [alt chains info json] |  
+| n_alt_chains | uint64_t | BIGINT | [n_alt_chains] |  
+| alt_chains_info_json | std::string | VARCHAR | [alt chains info json] |  
 | **sync_state** |  
 | is_node_synced | bool | BOOL | [is node synced?] |  
-| nch | uint64_t | INT | [NCH] |  
-| nth | uint64_t | INT | [NTH] |  
+| nch | uint64_t | BIGINT | [NCH] |  
+| nth | uint64_t | BIGINT | [NTH] |  
 | **archive_db** |  
-| deltart | N/A | INT | = (ceil(NRT / 1000) - MRT) |  
+| deltart | N/A | BIGINT | = (ceil(NRT / 1000) - MRT) |  
 
-## monerod-archive v6 Output
-### Ordering
-
-| # | Output Field |
-| - | - |
-| 1 | [NRT](#nrt) |
-| 2 | [Is Alt Block?](#is-alt-block) |
-| 3 | [Block JSON](#block-json) |
-| 4 | [Alt Chains Length (n_alt_chains)](#alt-chains-length-n_alt_chains) |
-| 5 | [Alt Chains Info JSON](#alt-chains-info-json) |
-
-### Line example
-
-    1532871954727	0	{"major_version": 1, "minor_version": 0, "timestamp": 1402673384, "prev_id": "dc13872f56acdc742a73508ff5ca9bb53250be7ed67fc3f25d8ad00c291099e7", "nonce": 1073742811, "miner_tx": {"version": 1, "unlock_time": 83696, "vin": [ {"gen": {"height": 83636}}], "vout": [ {"amount": 4001075093, "target": {"key": "04e0e92193a84b4ea5ffd49fa6b4696263e013aa28c42ef5d5f0a21329ec065d"}}, {"amount": 80000000000, "target": {"key": "19df558f9df5e2bd3c6921c9f5bb470c230a11467fedd74192e5bcaa37ea5cc3"}}, {"amount": 200000000000, "target": {"key": "1bc686513c1f86cd67ce48c25d3b83767da6949de354d3f84b6e6c6cbac71976"}}, {"amount": 6000000000000, "target": {"key": "3067b47349622701d410711ca8a87a473995c322df0b80c2b249bd6598c7b64d"}}, {"amount": 10000000000000, "target": {"key": "6a803d29300975504e7eee2fdb2a0e92995de925e207659dac0ccd90802b25a8"}}], "extra": [ 1, 225, 235, 208, 96, 218, 92, 35, 141, 25, 226, 55, 205, 31, 185, 117, 86, 153, 56, 17, 188, 73, 168, 16, 102, 95, 180, 84, 138, 233, 137, 141, 130, 2, 8, 0, 0, 0, 2, 126, 21, 54, 222], "signatures": [ ]}, "tx_hashes": [ "5af850ea6bdc70a16710ed1396e28991a2fdacb084d7e3fdb63262b793e990e6"]}	1	[{"length":1,"height":2,"deep":2,"diff":0,"hash":"ba8bc38ba847a63b71ab8b8af7eba7ba87be87afa7bef7828ab288cb28a742b4"}]
-
-
-## monerod-archive v5 Output
-
-    {ARCHIVE_OBJECT_TYPE}.{TIMESTAMP}_{NONCE}.YYYYMMDDHHMMSS
-    
-    ARCHIVE_OBJECT_TYPE is:     block, altchain
-    TIMESTAMP, NONCE found in:  block header data
-
-    Filename:
-        altchain    Altchain
-        block
-            + 0     Main Block
-            + 1     Alt Block
-        _tTTTTTTTT  timestamp
-        _hHHHHHHHH  height
-        _nNNNNNNNN  nonce
-        _rRRRRRRRR  random
-            .json   Block JSON
-            .log    Alt Chains Info JSON
-
-
-## Glibc 2.27 Update for Binary Release v6 and v7
-monerod-archive-v6 and monerod-archive-v7 binary release require glibc 2.27. You may need to update your glibc to run it. glibc 2.27 is almost completely backwards compatible with older glibc, but you may also solve a glibc conflict via containerization or building the monerod-archive binary yourself.
-
-Check your glibc version:
-
-    ldd --version
-
-##### Ubuntu/Debian Instructions
-You can update with ``apt-get install libc6-dev`` from the Sid (unstable) Debian apt repo.  
-Follow this update guide for Debian (thanks @serhack):
-
-    To upgrade you need to follow these passages. 
-    Warning: if you run commands and you don't know what they do, 
-    please don't try to upgrade G_LIBC!
-    
-    1. Open with any editor the /etc/apt/sources.list
-    2. Add the following line deb http://ftp.us.debian.org/debian sid main
-    3. Run apt-get update
-    4. Let's upgrade LIBC! Run apt-get install libc6-dev and then wait...
-    5. Reopen /etc/apt/sources.list and comment (with "#") the line you wrote in the step 2. Enjoy!
-    
-    NEVER NEVER run a apt-get upgrade or apt-get full-upgrade while you are touching /etc/apt/sources.list . 
-    If you upgrade all the packages to "sid", the system can become unstable.
 
 
 ## Changelog
+v17
+- Updated to Monero 0.17.1.1 for Monero network upgrade v14.
+- Removed binary releases and related information. To use monerod-archive, build Monero from source with the code provided in this repo.
+- Removed documentation for obsolete monerod-archive versions.
+
 v8
 - Updated to Monero 0.13.0.2 for Monero network upgrade v8 and v9.
 - Built and tested on Debian 9.5.

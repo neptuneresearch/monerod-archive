@@ -1,7 +1,7 @@
-From 540802d823daf558db7f7f876f04ea35f2ff7875 Mon Sep 17 00:00:00 2001
+From ebce1b9dd9fa6878cda5ab3348ad088105e24d35 Mon Sep 17 00:00:00 2001
 From: neptuneresearch <neptuneresearch@protonmail.com>
-Date: Wed, 10 Oct 2018 00:08:00 +0000
-Subject: [PATCH] monerod-archive-v8
+Date: Mon, 19 Oct 2020 02:41:06 +0000
+Subject: [PATCH] monerod-archive v17
 
 ---
  src/cryptonote_core/blockchain.cpp      | 177 +++++++++++++++++++++++-
@@ -10,23 +10,32 @@ Subject: [PATCH] monerod-archive-v8
  3 files changed, 210 insertions(+), 6 deletions(-)
 
 diff --git a/src/cryptonote_core/blockchain.cpp b/src/cryptonote_core/blockchain.cpp
-index eb869b79..90be89b6 100644
+index 93e3ef3bc..bc8e87ea3 100644
 --- a/src/cryptonote_core/blockchain.cpp
 +++ b/src/cryptonote_core/blockchain.cpp
 @@ -27,6 +27,9 @@
  // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  //
  // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
-+// 
-+// ** Patched with MonerodArchive v8 by Neptune Research
++//
++// ** Patched with MonerodArchive v17 by Neptune Research
 +// ** SPDX-License-Identifier: BSD-3-Clause
  
  #include <algorithm>
  #include <cstdio>
-@@ -407,7 +410,9 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
-     block bl = boost::value_initialized<block>();
-     block_verification_context bvc = boost::value_initialized<block_verification_context>();
+@@ -58,6 +61,8 @@
+ #include "common/varint.h"
+ #include "common/pruning.h"
+ 
++#include <chrono> // MonerodArchive Dependency #1
++
+ #undef MONERO_DEFAULT_LOG_CATEGORY
+ #define MONERO_DEFAULT_LOG_CATEGORY "blockchain"
+ 
+@@ -345,7 +350,9 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
+     block_verification_context bvc = {};
      generate_genesis_block(bl, get_config(m_nettype).GENESIS_TX, get_config(m_nettype).GENESIS_NONCE);
+     db_wtxn_guard wtxn_guard(m_db);
 -    add_new_block(bl, bvc);
 +    // <MonerodArchive (IsNodeSynced?3)>
 +    add_new_block(bl, bvc, std::make_pair(0, 0));
@@ -34,35 +43,32 @@ index eb869b79..90be89b6 100644
      CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed, false, "Failed to add genesis block to blockchain");
    }
    // TODO: if blockchain load successful, verify blockchain against both
-@@ -659,7 +664,9 @@ bool Blockchain::reset_and_set_genesis_block(const block& b)
-   m_hardfork->init();
+@@ -664,7 +671,9 @@ bool Blockchain::reset_and_set_genesis_block(const block& b)
  
-   block_verification_context bvc = boost::value_initialized<block_verification_context>();
+   db_wtxn_guard wtxn_guard(m_db);
+   block_verification_context bvc = {};
 -  add_new_block(b, bvc);
 +  // <MonerodArchive (IsNodeSynced?4)>
 +  add_new_block(b, bvc, std::make_pair(0, 0));
-+  // <MonerodArchive>
-   update_next_cumulative_weight_limit();
++  // </MonerodArchive>
+   if (!update_next_cumulative_weight_limit())
+     return false;
    return bvc.m_added_to_main_chain && !bvc.m_verifivation_failed;
- }
-@@ -3577,7 +3584,10 @@ bool Blockchain::update_next_cumulative_weight_limit()
+@@ -4482,7 +4491,7 @@ bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effecti
    return true;
  }
  //------------------------------------------------------------------
--bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc)
-+/*
-+  MonerodArchive: Monero 0.13.0.2 Blockchain::add_new_block patch
-+*/
-+bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc, std::pair<uint64_t,uint64_t> archive_sync_state)
+-bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
++bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc, std::pair<uint64_t,uint64_t> archive_sync_state)
  {
-   LOG_PRINT_L3("Blockchain::" << __func__);
-   //copy block here to let modify block.target
-@@ -3595,9 +3605,17 @@ bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc
+   try
+   {
+@@ -4500,9 +4509,17 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
      return false;
    }
  
 +  // <MonerodArchive (All Blocks)>
-+  block& bl_archive = const_cast<block&>(bl_);
++  block& bl_archive = const_cast<block&>(bl);
 +  // <MonerodArchive (All Blocks)>
 +
    //check that block refers to chain tail
@@ -74,8 +80,8 @@ index eb869b79..90be89b6 100644
 +
      //chain switching or wrong block
      bvc.m_added_to_main_chain = false;
-     m_db->block_txn_stop();
-@@ -3606,11 +3624,164 @@ bool Blockchain::add_new_block(const block& bl_, block_verification_context& bvc
+     rtxn_guard.stop();
+@@ -4511,6 +4528,12 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
      return r;
      //never relay alternative blocks
    }
@@ -86,19 +92,21 @@ index eb869b79..90be89b6 100644
 +  }
 +  // </MonerodArchive (Main Block)>
  
-   m_db->block_txn_stop();
+   rtxn_guard.stop();
    return handle_block_to_main_chain(bl, id, bvc);
+@@ -4524,6 +4547,154 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc)
+   }
  }
  //------------------------------------------------------------------
 +/*
 +  <MonerodArchive>
-+*/
++ */
 +void Blockchain::archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state)
 +{
 +  // ## read archive configuration
 +  std::string filename_archive = archive_output_filename();
 +  std::string output_field_delimiter = "\t";
-+  uint64_t archive_version = 8;
++  uint64_t archive_version = 11;
 +
 +  // ## alt_chain_info
 +  std::pair<uint64_t,std::string> altchaininfo = archive_alt_chain_info();
@@ -109,7 +117,7 @@ index eb869b79..90be89b6 100644
 +  uint64_t archive_current_height = archive_sync_state.first;
 +  uint64_t archive_target_height = archive_sync_state.second;
 +  bool is_node_synced = (archive_current_height >= archive_target_height);
-+  
++
 +  // ## get data from block
 +  // block height: miner_tx => txin_v transaction.vin => txin_v[0] => txin_v.txin_gen => txin_gen.height
 +  size_t block_height = boost::get<txin_gen>(b.miner_tx.vin[0]).height;
@@ -121,14 +129,14 @@ index eb869b79..90be89b6 100644
 +  // ## OUTPUT - Daemon console
 +  std::stringstream patch_log;
 +  patch_log << "Block Archive"
-+    << (is_alt_block ? " ALT " : " MAIN")
-+    << " H=" << block_height 
-+    << " MRT=" << block_timestamp 
-+    << " NRT=" << node_timestamp
-+    << " n_alt_chains=" << altchaininfo_length
-+    << (is_node_synced ? " FULL" : " SYNC")
-+    << " NCH=" << archive_current_height
-+    << " NTH=" << archive_target_height;
++            << (is_alt_block ? " ALT " : " MAIN")
++            << " H=" << block_height
++            << " MRT=" << block_timestamp
++            << " NRT=" << node_timestamp
++            << " n_alt_chains=" << altchaininfo_length
++            << (is_node_synced ? " FULL" : " SYNC")
++            << " NCH=" << archive_current_height
++            << " NTH=" << archive_target_height;
 +  MCLOG_MAGENTA(el::Level::Info, "global", patch_log.str());
 +
 +  // ## OUTPUT - Filesystem recording
@@ -142,28 +150,28 @@ index eb869b79..90be89b6 100644
 +  std::stringstream archive_line;
 +  // note: string << int required for int to string conversion
 +  archive_line << "" << archive_version // 1
-+    << output_field_delimiter
-+    << node_timestamp   // 2
-+    << output_field_delimiter
-+    << (is_alt_block ? "1" : "0") // 3
-+    << output_field_delimiter;
++               << output_field_delimiter
++               << node_timestamp   // 2
++               << output_field_delimiter
++               << (is_alt_block ? "1" : "0") // 3
++               << output_field_delimiter;
 +  archive_line << (block_json_success ? block_json_buf.str() : "{}"); // 4
 +  archive_line << output_field_delimiter
-+    << altchaininfo_length  // 5
-+    << output_field_delimiter
-+    << altchaininfo_json  // 6
-+    << output_field_delimiter
-+    << (is_node_synced ? "1" : "0") // 7
-+    << output_field_delimiter
-+    << archive_current_height // 8
-+    << output_field_delimiter
-+    << archive_target_height  // 9
-+    << "\n";
++               << altchaininfo_length  // 5
++               << output_field_delimiter
++               << altchaininfo_json  // 6
++               << output_field_delimiter
++               << (is_node_synced ? "1" : "0") // 7
++               << output_field_delimiter
++               << archive_current_height // 8
++               << output_field_delimiter
++               << archive_target_height  // 9
++               << "\n";
 +
 +  bool save_success = epee::file_io_utils::append_string_to_file(filename_archive, archive_line.str());
 +}
 +//-----------------------------------------------------------------------------------------------
-+std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info() 
++std::pair<uint64_t,std::string> Blockchain::archive_alt_chain_info()
 +{
 +  // rpc_get_info: read height_without_bootstrap
 +  uint64_t height_without_bootstrap;
@@ -171,7 +179,8 @@ index eb869b79..90be89b6 100644
 +  ++height_without_bootstrap; // turn top block height into blockchain height
 +
 +  // rpc_get_alternate_chains
-+  std::list<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>> chains = get_alternative_chains();
++  std::vector<std::pair<block_extended_info,std::vector<crypto::hash>>> chains = get_alternative_chains();
++
 +  uint64_t altchains_length = boost::lexical_cast<uint64_t>(chains.size());
 +
 +  // serialize altchains
@@ -201,12 +210,12 @@ index eb869b79..90be89b6 100644
 +      }
 +      // serialize chain
 +      altchains_json << "{"
-+                          << "\"length\"" << ":" << length << ","
-+                          << "\"height\"" << ":" << start_height << ","
-+                          << "\"deep\""   << ":" << deep << ","
-+                          << "\"diff\""   << ":" << chain.first.cumulative_difficulty << ","
-+                          << "\"hash\""   << ":" << "\"" << block_hash << "\""
-+                      << "}";
++                     << "\"length\"" << ":" << length << ","
++                     << "\"height\"" << ":" << start_height << ","
++                     << "\"deep\""   << ":" << deep << ","
++                     << "\"diff\""   << ":" << chain.first.cumulative_difficulty << ","
++                     << "\"hash\""   << ":" << "\"" << block_hash << "\""
++                     << "}";
 +    }
 +
 +    //  root array end
@@ -221,7 +230,7 @@ index eb869b79..90be89b6 100644
 +  return std::make_pair(altchains_length, altchains_json.str());
 +}
 +//-----------------------------------------------------------------------------------------------
-+std::string Blockchain::archive_output_filename() 
++std::string Blockchain::archive_output_filename()
 +{
 +  // ## USER INPUT
 +  // # output_filename
@@ -235,28 +244,28 @@ index eb869b79..90be89b6 100644
 +}
 +/*
 +  </MonerodArchive>
-+*/
++ */
 +//------------------------------------------------------------------
  //TODO: Refactor, consider returning a failure height and letting
  //      caller decide course of action.
  void Blockchain::check_against_checkpoints(const checkpoints& points, bool enforce)
 diff --git a/src/cryptonote_core/blockchain.h b/src/cryptonote_core/blockchain.h
-index ab66fac8..92cacbb5 100644
+index a9b7ca1da..c90a52877 100644
 --- a/src/cryptonote_core/blockchain.h
 +++ b/src/cryptonote_core/blockchain.h
 @@ -27,6 +27,9 @@
  // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  //
  // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
-+// 
-+// ** Patched with MonerodArchive v8 by Neptune Research
++//
++// ** Patched with MonerodArchive v11 by Neptune Research
 +// ** SPDX-License-Identifier: BSD-3-Clause
  
  #pragma once
  #include <boost/asio/io_service.hpp>
-@@ -289,6 +292,9 @@ namespace cryptonote
+@@ -329,6 +332,9 @@ namespace cryptonote
       */
-     difficulty_type get_difficulty_for_next_block();
+     size_t recalculate_difficulties(boost::optional<uint64_t> start_height = boost::none);
  
 +    /*
 +     * <MonerodArchive>
@@ -264,7 +273,7 @@ index ab66fac8..92cacbb5 100644
      /**
       * @brief adds a block to the blockchain
       *
-@@ -302,7 +308,25 @@ namespace cryptonote
+@@ -342,7 +348,25 @@ namespace cryptonote
       *
       * @return true on successful addition to the blockchain, else false
       */
@@ -274,17 +283,17 @@ index ab66fac8..92cacbb5 100644
 +    /**
 +     * @copydoc Blockchain::archive_block
 +     */
-+    void archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state);
++        void archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state);
 +
 +    /**
 +     * @copydoc Blockchain::archive_alt_chain_info
 +     */
-+    std::pair<uint64_t,std::string> archive_alt_chain_info();
++        std::pair<uint64_t,std::string> archive_alt_chain_info();
 +
 +    /**
 +     * @copydoc Blockchain::archive_output_filename
 +     */
-+    std::string archive_output_filename();
++        std::string archive_output_filename();
 +    /*
 +     * </MonerodArchive>
 +    */
@@ -292,7 +301,7 @@ index ab66fac8..92cacbb5 100644
      /**
       * @brief clears the blockchain and starts a new one
 diff --git a/src/cryptonote_core/cryptonote_core.cpp b/src/cryptonote_core/cryptonote_core.cpp
-index 69e3c708..05c2c6ef 100644
+index fef411a0c..aa6342ef5 100644
 --- a/src/cryptonote_core/cryptonote_core.cpp
 +++ b/src/cryptonote_core/cryptonote_core.cpp
 @@ -27,6 +27,9 @@
@@ -300,15 +309,15 @@ index 69e3c708..05c2c6ef 100644
  //
  // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 +//
-+// ** Patched with MonerodArchive v8 by Neptune Research
++// ** Patched with MonerodArchive v11 by Neptune Research
 +// ** SPDX-License-Identifier: BSD-3-Clause
  
  #include <boost/algorithm/string.hpp>
- 
-@@ -1252,7 +1255,10 @@ namespace cryptonote
+ #include <boost/uuid/nil_generator.hpp>
+@@ -1476,7 +1479,10 @@ namespace cryptonote
+       m_miner.resume();
        return false;
      }
-     prepare_handle_incoming_blocks(blocks);
 -    m_blockchain_storage.add_new_block(b, bvc);
 +    // <MonerodArchive (IsNodeSynced?1)>
 +    std::pair<uint64_t,uint64_t> archive_sync_state = std::make_pair(get_current_blockchain_height(), get_target_blockchain_height());
@@ -317,7 +326,7 @@ index 69e3c708..05c2c6ef 100644
      cleanup_handle_incoming_blocks(true);
      //anyway - update miner template
      update_miner_block_template();
-@@ -1298,7 +1304,10 @@ namespace cryptonote
+@@ -1522,7 +1528,10 @@ namespace cryptonote
    //-----------------------------------------------------------------------------------------------
    bool core::add_new_block(const block& b, block_verification_context& bvc)
    {
@@ -329,6 +338,3 @@ index 69e3c708..05c2c6ef 100644
    }
  
    //-----------------------------------------------------------------------------------------------
--- 
-2.19.0
-

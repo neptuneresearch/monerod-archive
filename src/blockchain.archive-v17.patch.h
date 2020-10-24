@@ -27,10 +27,9 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
-// 
-// ** Patched with MonerodArchive v8 by Neptune Research
+//
+// ** Patched with MonerodArchive v17 by Neptune Research
 // ** SPDX-License-Identifier: BSD-3-Clause
-// ** Changed code appears below.
 
     /*
      * <MonerodArchive>
@@ -53,17 +52,17 @@
     /**
      * @copydoc Blockchain::archive_block
      */
-    void archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state);
+        void archive_block(block& b, bool is_alt_block, std::pair<uint64_t,uint64_t> archive_sync_state);
 
     /**
      * @copydoc Blockchain::archive_alt_chain_info
      */
-    std::pair<uint64_t,std::string> archive_alt_chain_info();
+        std::pair<uint64_t,std::string> archive_alt_chain_info();
 
     /**
      * @copydoc Blockchain::archive_output_filename
      */
-    std::string archive_output_filename();
+        std::string archive_output_filename();
     /*
      * </MonerodArchive>
     */

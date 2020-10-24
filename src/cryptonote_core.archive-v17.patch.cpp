@@ -28,14 +28,13 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 //
-// ** Patched with MonerodArchive v7 by Neptune Research
+// ** Patched with MonerodArchive v17 by Neptune Research
 // ** SPDX-License-Identifier: BSD-3-Clause
-// ** Changed code appears below.
 
   //-----------------------------------------------------------------------------------------------
-  bool core::handle_block_found(block& b)
+  bool core::handle_block_found(block& b, block_verification_context &bvc)
   {
-    block_verification_context bvc = boost::value_initialized<block_verification_context>();
+    bvc = {};
     m_miner.pause();
     std::vector<block_complete_entry> blocks;
     try
@@ -47,7 +46,13 @@
       m_miner.resume();
       return false;
     }
-    prepare_handle_incoming_blocks(blocks);
+    std::vector<block> pblocks;
+    if (!prepare_handle_incoming_blocks(blocks, pblocks))
+    {
+      MERROR("Block found, but failed to prepare to add");
+      m_miner.resume();
+      return false;
+    }
     // <MonerodArchive (IsNodeSynced?1)>
     std::pair<uint64_t,uint64_t> archive_sync_state = std::make_pair(get_current_blockchain_height(), get_target_blockchain_height());
     m_blockchain_storage.add_new_block(b, bvc, archive_sync_state);
@@ -61,7 +66,7 @@
     CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed, false, "mined block failed verification");
     if(bvc.m_added_to_main_chain)
     {
-      cryptonote_connection_context exclude_context = boost::value_initialized<cryptonote_connection_context>();
+      cryptonote_connection_context exclude_context = {};
       NOTIFY_NEW_BLOCK::request arg = AUTO_VAL_INIT(arg);
       arg.current_blockchain_height = m_blockchain_storage.get_current_blockchain_height();
       std::vector<crypto::hash> missed_txs;
@@ -78,11 +83,11 @@
       block_to_blob(b, arg.b.block);
       //pack transactions
       for(auto& tx:  txs)
-        arg.b.txs.push_back(tx);
+        arg.b.txs.push_back({tx, crypto::null_hash});
 
       m_pprotocol->relay_block(arg, exclude_context);
     }
-    return bvc.m_added_to_main_chain;
+    return true;
   }
 
   //-----------------------------------------------------------------------------------------------
