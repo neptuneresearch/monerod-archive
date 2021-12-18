@@ -10,7 +10,7 @@ monerod-archive operates like a normal Monero daemon as this data is recorded.
   
   ![Monero Block Flow and Point of Integration with monerod-archive](docs/integration.png)
   
-> monerod-archive is copyright (c) 2018-2020 Neptune Research.  
+> monerod-archive is copyright (c) 2018-2021 Neptune Research.  
 monerod-archive is offered under the BSD-3-Clause open source license. See [LICENSE](LICENSE) for more information.  
 
 > monerod-archive is an extension to [Monero](https://github.com/monero-project/monero).  
