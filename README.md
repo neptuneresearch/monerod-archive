@@ -530,10 +530,12 @@ The RPC command is located at ```t_rpc_command_executor::alt_chain_info()``` (``
 Regarding `https://github.com/neptuneresearch/monero`: rebase `archive` branch onto the latest tag from the main repo, and resolve any conflicts.
 
 ```
+git clone --recursive https://github.com/neptuneresearch/monero
+git submodule sync
 git remote add core https://github.com/monero-project/monero
 git remote update core --prune
 git checkout archive
-git rebase tags/v0.17.1.3
+git rebase tags/v0.17.3.0
 git push --mirror
 ```
 
@@ -576,6 +578,7 @@ Complex native types use VARCHAR columns because they are JSON serialized.
 
 ## Changelog
 v17
+- Updated to Monero 0.17.3.0.
 - Updated to Monero 0.17.1.3.
 - Updated to Monero 0.17.1.1 for Monero network upgrade v14.
 - Removed binary releases and related information. To use monerod-archive, build Monero from source with the code provided in this repo.
